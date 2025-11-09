@@ -44,8 +44,14 @@ pip install -r requirements.txt
 
 4. Train the model (or use pre-trained):
 ```bash
-# Instructions for training your model
-# You'll need the atp_tennis.csv dataset
+## ⚠️ Note About Model Files
+
+The trained model file (`tennis_rf_small_model.joblib`) is not included in this repository due to its size. To use this API, you'll need to:
+
+1. Train the model using your own dataset, or
+2. Contact me for access to the pre-trained model
+
+The model metadata is included in `saved_models/model_metadata.json`.
 python train_model.py
 ```
 
