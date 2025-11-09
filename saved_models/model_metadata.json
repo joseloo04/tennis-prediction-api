@@ -1,0 +1,15 @@
+{
+  "features": [
+    "Rank_1",
+    "Rank_2",
+    "Pts_1",
+    "Pts_2",
+    "Odd_1",
+    "Odd_2"
+  ],
+  "model_type": "RandomForestClassifier",
+  "n_estimators": 250,
+  "min_samples_leaf": 158,
+  "test_accuracy": 0.689107059373539,
+  "validation_accuracy": 0.6962518506974207
+}
