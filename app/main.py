@@ -1,23 +1,35 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import time
+from sqlalchemy.orm import Session
 
 from app.models import MatchFeatures, PredictionResponse, HealthResponse
 from app.ml.model import predictor
+from app.database import create_tables, get_db, Prediction
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup Actions
+    # This runs when the API STARTS
     print("🚀 Starting up API...")
+    
+    # Load ML model
     success = predictor.load_model()
-    # Log if model failed to load
     if not success:
         print("⚠️  WARNING: Model failed to load!")
+    
+    # Create database tables
+    try:
+        create_tables()
+        print("✓ Database initialized successfully")
+    except Exception as e:
+        print(f"⚠️  WARNING: Database initialization failed: {e}")
+    
     yield
+    
     # This runs when the API STOPS
     print("👋 Shutting down API...")
-
 # Create FastAPI app instance
 app = FastAPI(
     title="Tennis Match Prediction API",
@@ -73,9 +85,12 @@ async def get_model_info():
     }
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict_match(features: MatchFeatures):
+async def predict_match(
+    features: MatchFeatures,
+    db: Session = Depends(get_db)  # Inject database session
+):
     """
-    Predict the winner of a tennis match
+    Predict the winner of a tennis match and save to database
     
     Returns:
     - prediction: 0 = Player_2 wins, 1 = Player_1 wins
@@ -99,24 +114,47 @@ async def predict_match(features: MatchFeatures):
         result = predictor.predict(features_dict)
         processing_time = time.time() - start_time
         
-        # Step 4: Log it (helpful for debugging)
-        print(f"✓ Prediction: {result['winner']} (confidence: {result['confidence']:.2%}, time: {processing_time:.4f}s)")
+        # Step 4: Save prediction to database
+        db_prediction = Prediction(
+            rank_1=features.Rank_1,
+            rank_2=features.Rank_2,
+            pts_1=features.Pts_1,
+            pts_2=features.Pts_2,
+            odd_1=features.Odd_1,
+            odd_2=features.Odd_2,
+            prediction=result['prediction'],
+            winner=result['winner'],
+            confidence=result['confidence'],
+            probability_player1=result['probability_player1'],
+            probability_player2=result['probability_player2'],
+            processing_time=processing_time
+        )
+        
+        # Add to database and commit
+        db.add(db_prediction)
+        db.commit()
+        db.refresh(db_prediction)  # Get the ID back
+        
+        # Step 5: Log it
+        print(f"✓ Prediction #{db_prediction.id}: {result['winner']} "
+              f"(confidence: {result['confidence']:.2%}, time: {processing_time:.4f}s)")
         
         return result
         
     except ValueError as e:
-        # Validation errors (missing features, etc.)
+        # Validation errors
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        # Roll back database changes if error
+        db.rollback()
         # Unexpected errors
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Prediction error: {str(e)}"
-        )           
-
+        )
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
