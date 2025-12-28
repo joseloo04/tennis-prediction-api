@@ -8,7 +8,7 @@ from app.models import MatchFeatures, PredictionResponse, HealthResponse
 from app.ml.model import predictor
 from app.database import create_tables, get_db, Prediction
 
-
+# Define lifespan events for startup and shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # This runs when the API STARTS
@@ -30,7 +30,8 @@ async def lifespan(app: FastAPI):
     
     # This runs when the API STOPS
     print("👋 Shutting down API...")
-# Create FastAPI app instance
+
+# # Initialize FastAPI
 app = FastAPI(
     title="Tennis Match Prediction API",
     description="Predict ATP tennis match outcomes using Random Forest ML model",
@@ -38,6 +39,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Configure CORS (Cross-Origin Resource Sharing)
 app.add_middleware(
     CORSMiddleware,
     # TODO: In production, change to specific origins like ["https://yourdomain.com"]
@@ -47,6 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Root endpoint
 @app.get("/")
 async def root():
     """Welcome endpoint"""
@@ -66,6 +69,7 @@ async def health_check():
         "message": "Model loaded successfully" if predictor.model_loaded else "Model not loaded"
     }
 
+# Model info endpoint
 @app.get("/model/info")
 async def get_model_info():
     """Get information about the loaded model"""
@@ -84,10 +88,11 @@ async def get_model_info():
         "required_features": predictor.feature_names
     }
 
+# Prediction endpoint
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_match(
     features: MatchFeatures,
-    db: Session = Depends(get_db)  # Inject database session
+    db: Session = Depends(get_db)  # ← NEW: Inject database session
 ):
     """
     Predict the winner of a tennis match and save to database
@@ -155,6 +160,63 @@ async def predict_match(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Prediction error: {str(e)}"
         )
+    
+# Added analytics endpoin
+@app.get("/analytics")
+async def get_analytics(db: Session = Depends(get_db)):
+    """
+    Get analytics about all predictions made
+    
+    Returns statistics about API usage and predictions
+    """
+    try:
+        # Get all predictions from database
+        all_predictions = db.query(Prediction).all()
+        
+        # Calculate statistics
+        total_predictions = len(all_predictions)
+        
+        if total_predictions == 0:
+            return {
+                "message": "No predictions made yet",
+                "total_predictions": 0
+            }
+        
+        # Count winners
+        player1_wins = sum(1 for p in all_predictions if p.winner == "Player_1")
+        player2_wins = sum(1 for p in all_predictions if p.winner == "Player_2")
+        
+        # Average confidence
+        avg_confidence = sum(p.confidence for p in all_predictions) / total_predictions
+        
+        # Average processing time
+        avg_processing_time = sum(p.processing_time for p in all_predictions) / total_predictions
+        
+        # Most recent prediction
+        most_recent = max(all_predictions, key=lambda p: p.timestamp)
+        
+        return {
+            "total_predictions": total_predictions,
+            "predictions_by_winner": {
+                "Player_1": player1_wins,
+                "Player_2": player2_wins
+            },
+            "average_confidence": round(avg_confidence, 4),
+            "average_processing_time_seconds": round(avg_processing_time, 6),
+            "most_recent_prediction": {
+                "id": most_recent.id,
+                "timestamp": most_recent.timestamp.isoformat(),
+                "winner": most_recent.winner,
+                "confidence": most_recent.confidence
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Analytics error: {str(e)}"
+        )
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
