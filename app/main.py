@@ -92,7 +92,7 @@ async def get_model_info():
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_match(
     features: MatchFeatures,
-    db: Session = Depends(get_db)  # ← NEW: Inject database session
+    db: Session = Depends(get_db)  # Inject database session
 ):
     """
     Predict the winner of a tennis match and save to database
