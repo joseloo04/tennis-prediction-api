@@ -161,7 +161,7 @@ async def predict_match(
             detail=f"Prediction error: {str(e)}"
         )
     
-# Added analytics endpoin
+# Added analytics endpoint
 @app.get("/analytics")
 async def get_analytics(db: Session = Depends(get_db)):
     """
