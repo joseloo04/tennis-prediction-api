@@ -217,6 +217,65 @@ async def get_analytics(db: Session = Depends(get_db)):
             detail=f"Analytics error: {str(e)}"
         )
 
+
+@app.get("/predictions/recent")
+async def get_recent_predictions(
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Get the most recent predictions
+    
+    Parameters:
+    - limit: Number of predictions to return (default 10, max 100)
+    """
+    # Validate limit
+    if limit > 100:
+        limit = 100
+    if limit < 1:
+        limit = 1
+    
+    try:
+        # Query recent predictions, ordered by timestamp
+        recent = db.query(Prediction)\
+                   .order_by(Prediction.timestamp.desc())\
+                   .limit(limit)\
+                   .all()
+        
+        # Format response
+        predictions = []
+        for pred in recent:
+            predictions.append({
+                "id": pred.id,
+                "timestamp": pred.timestamp.isoformat(),
+                "input": {
+                    "Rank_1": pred.rank_1,
+                    "Rank_2": pred.rank_2,
+                    "Pts_1": pred.pts_1,
+                    "Pts_2": pred.pts_2,
+                    "Odd_1": pred.odd_1,
+                    "Odd_2": pred.odd_2
+                },
+                "result": {
+                    "winner": pred.winner,
+                    "confidence": pred.confidence
+                },
+                "processing_time": pred.processing_time
+            })
+        
+        return {
+            "count": len(predictions),
+            "predictions": predictions
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching predictions: {str(e)}"
+        )
+
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
