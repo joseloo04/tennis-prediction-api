@@ -56,3 +56,5 @@ htmlcov/
 
 # Jupyter Notebooks checkpoints
 .ipynb_checkpoints/
+.vxenv/
+.venv/
